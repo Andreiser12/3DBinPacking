@@ -7,6 +7,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from geometry import Container, Box
 from constructive import ExtremePointsHeuristic
 from genetic import run_genetic_algorithm
+from simulated_annealing import run_simulated_annealing
 import threading
 import queue
 
@@ -34,7 +35,10 @@ class App(ctk.CTk):
         self.left_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
         self.left_frame.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=10, pady=10)
         
-        ctk.CTkLabel(self.left_frame, text="Container Settings", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        ctk.CTkLabel(self.left_frame, text="Optimization Method:").pack(anchor="w", padx=10)
+        self.method_variable = ctk.StringVar(value="Genetic Algorithm")
+        self.dropdown_method = ctk.CTkOptionMenu(self.left_frame, values=["Genetic Algorithm", "Simulated Annealing"], variable=self.method_variable)
+        self.dropdown_method.pack(fill="x", padx=10, pady=(0, 10))
         
         ctk.CTkLabel(self.left_frame, text="Dimensions (W, H, D):").pack(anchor="w", padx=10)
         self.entry_dimensions = ctk.CTkEntry(self.left_frame)
@@ -231,13 +235,15 @@ class App(ctk.CTk):
                     dimension = random.randint(2, 4)
                     box_obj = Box(i, dimension, dimension, dimension) 
                 test_boxes.append(box_obj)
+                
+            selected_method = self.method_variable.get()
             
-            self.statistics_box.insert("end", "[*] Test data generated.\n[*] Starting Genetic Algorithm in background...\n")
+            self.statistics_box.insert("end", f"[*] Test data generated.\n[*] Starting {selected_method} in background...\n")
             
             self.thread_queue = queue.Queue()
             
             thread = threading.Thread(target=self._optimization_thread, 
-                                      args=(width, height, depth, test_boxes, population_size, number_of_generations, number_of_boxes))
+                                      args=(width, height, depth, test_boxes, population_size, number_of_generations, number_of_boxes, selected_method))
             thread.daemon = True 
             thread.start()
             
@@ -247,19 +253,26 @@ class App(ctk.CTk):
             self.statistics_box.insert("end", f"\n[!] INITIALIZATION ERROR: {error}")
             self.btn_start.configure(state="normal", text="START")
 
-    def _optimization_thread(self, width, height, depth, test_boxes, population_size, number_of_generations, number_of_boxes):
+    def _optimization_thread(self, width, height, depth, test_boxes, population_size, number_of_generations, number_of_boxes, selected_method):
         try:
-            best_individual, logbook = run_genetic_algorithm(
-                width, 
-                height, 
-                depth, 
-                test_boxes, 
-                population_size=population_size, 
-                maximum_generations=number_of_generations
-            )
+            if selected_method == "Genetic Algorithm":
+                best_individual, logbook = run_genetic_algorithm(
+                    width, height, depth, test_boxes, 
+                    population_size=population_size, 
+                    maximum_generations=number_of_generations
+                )
+            else:
+                best_individual, logbook = run_simulated_annealing(
+                    width, height, depth, test_boxes,
+                    initial_temperature=1000.0,
+                    cooling_rate=0.95,
+                    iterations_per_temperature=number_of_generations
+                )
+                
             self.thread_queue.put(("success", (width, height, depth, test_boxes, best_individual, number_of_boxes)))
         except Exception as error:
             self.thread_queue.put(("error", str(error)))
+            
 
     def check_queue(self):
         try:
@@ -273,6 +286,7 @@ class App(ctk.CTk):
                 
         except queue.Empty:
             self.after(100, self.check_queue)
+            
 
     def _optimization_complete(self, width, height, depth, test_boxes, best_individual, number_of_boxes):
         self.current_width = width
