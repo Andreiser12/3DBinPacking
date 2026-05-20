@@ -4,11 +4,9 @@ import itertools
 class Box:
     def __init__(self, box_id: int, w: float, h: float, d: float):
         self.id: int = box_id
-        
         self.width: float = h
         self.height: float = h
         self.depth: float = d
-        
         self.x: float = None
         self.y: float = None
         self.z: float = None
@@ -22,10 +20,12 @@ class Box:
         self.z = z
         self.is_placed = True
         
+        
     def get_allowed_orientations(self) -> list:
         dims = (self.width, self.height, self.depth)
         unique_orientations = list(set(itertools.permutations(dims)))
         return unique_orientations
+    
     
     def rotate(self, new_w: float, new_h: float, new_d: float) -> None:
         self.width = new_w
@@ -38,8 +38,8 @@ class Container:
         self.width: float = w
         self.height: float = h
         self.depth: float = d
-        
         self.placed_boxes: list = []
+        
 
     def is_inside_boundaries(self, box) -> bool:
         if box.x < 0 or box.x + box.width > self.width:
@@ -49,6 +49,7 @@ class Container:
         if box.z < 0 or box.z + box.depth > self.depth:
             return False
         return True
+    
 
     def check_intersection(self, box1, box2) -> bool:
         separated_x = (box1.x + box1.width <= box2.x) or (box2.x + box2.width <= box1.x)
@@ -59,6 +60,7 @@ class Container:
             return False
             
         return True
+    
 
     def can_place_box(self, box) -> bool:
         if not self.is_inside_boundaries(box):
@@ -69,6 +71,7 @@ class Container:
                 return False
                 
         return True
+    
 
     def add_box(self, box) -> bool:
         if self.can_place_box(box):
