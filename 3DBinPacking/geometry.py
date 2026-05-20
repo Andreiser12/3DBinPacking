@@ -1,12 +1,11 @@
-
 import itertools
 
 class Box:
-    def __init__(self, box_id: int, w: float, h: float, d: float):
+    def __init__(self, box_id: int, width: float, height: float, depth: float):
         self.id: int = box_id
-        self.width: float = h
-        self.height: float = h
-        self.depth: float = d
+        self.width: float = width 
+        self.height: float = height
+        self.depth: float = depth
         self.x: float = None
         self.y: float = None
         self.z: float = None
@@ -22,22 +21,22 @@ class Box:
         
         
     def get_allowed_orientations(self) -> list:
-        dims = (self.width, self.height, self.depth)
-        unique_orientations = list(set(itertools.permutations(dims)))
+        dimensions = (self.width, self.height, self.depth)
+        unique_orientations = list(set(itertools.permutations(dimensions)))
         return unique_orientations
     
     
-    def rotate(self, new_w: float, new_h: float, new_d: float) -> None:
-        self.width = new_w
-        self.height = new_h
-        self.depth = new_d
+    def rotate(self, new_width: float, new_height: float, new_depth: float) -> None:
+        self.width = new_width
+        self.height = new_height
+        self.depth = new_depth
         
         
 class Container:
-    def __init__(self, w: float, h: float, d: float):
-        self.width: float = w
-        self.height: float = h
-        self.depth: float = d
+    def __init__(self, width: float, height: float, depth: float):
+        self.width: float = width
+        self.height: float = height
+        self.depth: float = depth
         self.placed_boxes: list = []
         
 
@@ -78,5 +77,3 @@ class Container:
             self.placed_boxes.append(box)
             return True
         return False
-        
-        
