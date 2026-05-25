@@ -34,13 +34,10 @@ def generate_neighbor(current_state):
     neighbor_order = list(current_state[0])
     neighbor_orientations = list(current_state[1])
     
-    # Alegem aleator 50-50 dacă schimbăm ordinea SAU orientarea
     if random.random() < 0.5:
-        # Inversăm două cutii în ordinea de introducere
         index1, index2 = random.sample(range(len(neighbor_order)), 2)
         neighbor_order[index1], neighbor_order[index2] = neighbor_order[index2], neighbor_order[index1]
     else:
-        # Schimbăm orientarea unei cutii aleatoare
         index = random.randint(0, len(neighbor_orientations) - 1)
         neighbor_orientations[index] = random.randint(0, 5)
         

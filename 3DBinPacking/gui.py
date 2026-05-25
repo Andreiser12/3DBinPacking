@@ -103,6 +103,7 @@ class App(ctk.CTk):
         self.btn_start.grid(row=0, column=1, padx=20, pady=15)
 
         self.init_empty_plot()
+        
 
     def get_inputs(self):
         dimensions_string = self.entry_dimensions.get().split(',')
@@ -113,6 +114,7 @@ class App(ctk.CTk):
             return width, height, depth
         except (IndexError, ValueError):
             return 10.0, 10.0, 10.0
+        
 
     def init_empty_plot(self, width=None, height=None, depth=None):
         try:
@@ -142,6 +144,7 @@ class App(ctk.CTk):
         except Exception as error:
             if hasattr(self, 'statistics_box'):
                 self.statistics_box.insert("end", f"[!] Display Error: {error}\n")
+                
 
     def draw_packed_container(self, container, extreme_points_list=None):
         self.init_empty_plot(container.width, container.height, container.depth)
@@ -189,6 +192,7 @@ class App(ctk.CTk):
                             label="Extreme Points")
 
         self.canvas.draw_idle()
+        
 
     def update_slider(self, value):
         step = int(float(value))
@@ -213,6 +217,7 @@ class App(ctk.CTk):
             heuristic.pack_box(box)
             
         self.draw_packed_container(temp_container, extreme_points_list=heuristic.extreme_points_list)
+        
 
     def run_optimization(self):
         self.statistics_box.delete("0.0", "end")
@@ -252,6 +257,7 @@ class App(ctk.CTk):
         except Exception as error:
             self.statistics_box.insert("end", f"\n[!] INITIALIZATION ERROR: {error}")
             self.btn_start.configure(state="normal", text="START")
+            
 
     def _optimization_thread(self, width, height, depth, test_boxes, population_size, number_of_generations, number_of_boxes, selected_method):
         try:
@@ -320,6 +326,7 @@ class App(ctk.CTk):
         self.statistics_box.insert("end", f"Placed Boxes: {len(temp_container.placed_boxes)} / {number_of_boxes}\n")
         
         self.btn_start.configure(state="normal", text="START OPTIMIZATION")
+        
 
     def _optimization_error(self, error_message):
         self.statistics_box.insert("end", f"\n[!] EXECUTION ERROR: {error_message}")
