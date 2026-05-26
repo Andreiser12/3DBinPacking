@@ -1,3 +1,7 @@
+"""
+Tabu Search pentru 3D Bin Packing.
+"""
+
 import time
 import random
 from collections import deque
@@ -9,16 +13,13 @@ VOLUME_TOLERANCE = 1e-6
 
 def evaluate_solution(solution, container_width, container_height, container_depth,
                       original_boxes, box_order):
-
     test_container = Container(container_width, container_height, container_depth)
     heuristic = ExtremePointsHeuristic(test_container)
 
     for index, box_idx in enumerate(box_order):
-        ep_choice = solution[index]  
-
+        ep_choice = solution[index]
         original_box = original_boxes[box_idx]
         box = Box(original_box.id, original_box.width, original_box.height, original_box.depth)
-
         _try_pack_with_ep_choice(heuristic, box, ep_choice)
 
     occupied_volume = sum(
@@ -38,10 +39,10 @@ def _try_pack_with_ep_choice(heuristic, box, ep_choice):
             box.place(ep[0], ep[1], ep[2])
             if heuristic.container.can_place_box(box):
                 feasible_eps.append((ep, (w, h, d)))
-                break  
+                break
 
     if not feasible_eps:
-        return False  
+        return False
 
     safe_index = min(ep_choice - 1, len(feasible_eps) - 1)
     chosen_ep, chosen_orientation = feasible_eps[safe_index]
@@ -59,12 +60,10 @@ def generate_neighbors(solution, element_range, neighborhood_size):
     n = len(solution)
 
     for i in range(n):
-
         if solution[i] + 1 <= element_range[i]:
             new_sol = solution.copy()
             new_sol[i] = solution[i] + 1
             neighbors.append((i, new_sol[i], new_sol))
-
         if solution[i] - 1 >= 1:
             new_sol = solution.copy()
             new_sol[i] = solution[i] - 1
@@ -101,13 +100,14 @@ def run_tabu_search(
         current_solution, container_width, container_height, container_depth,
         box_list, box_order
     )
+    total_evaluations = 1
 
     best_solution = current_solution.copy()
     best_fitness = current_fitness
 
     tabu_list = deque(maxlen=tabu_list_size)
 
-    history = []  # pentru analiza ulterioara
+    history = []
     history.append({
         "iteration": 0,
         "current_fitness": current_fitness,
@@ -121,13 +121,15 @@ def run_tabu_search(
             "best_fitness": best_fitness,
         })
 
-    neighborhood_size = min(50, number_of_boxes * 2)
+    neighborhood_size = min(50, max(10, number_of_boxes * 2))
     iterations_without_improvement = 0
     stopped_early = False
+    stop_reason = "max_iterations"
     iteration = 0
 
     if best_fitness >= container_volume - VOLUME_TOLERANCE:
         stopped_early = True
+        stop_reason = "optimal_fill"
 
     while (iteration < max_iterations
            and iterations_without_improvement < max_iterations_without_improvement
@@ -147,6 +149,7 @@ def run_tabu_search(
                 neighbor_sol, container_width, container_height, container_depth,
                 box_list, box_order
             )
+            total_evaluations += 1
 
             is_tabu = move in tabu_list
             if is_tabu and neighbor_fitness <= best_fitness:
@@ -158,6 +161,7 @@ def run_tabu_search(
                 best_neighbor_move = move
 
         if best_neighbor is None:
+            stop_reason = "no_valid_neighbors"
             break
 
         current_solution = best_neighbor
@@ -186,7 +190,16 @@ def run_tabu_search(
 
         if best_fitness >= container_volume - VOLUME_TOLERANCE:
             stopped_early = True
+            stop_reason = "optimal_fill"
 
+    # determinam motivul exact al opririi daca nu s-a setat deja
+    if not stopped_early and stop_reason == "max_iterations":
+        if iterations_without_improvement >= max_iterations_without_improvement:
+            stopped_early = True  # consideram stagnarea ca early stopping
+            stop_reason = "stagnation"
+        # altfel raman max_iterations
+
+    # reconstruim ordinea finala si orientarile pentru UI
     _, final_container = evaluate_solution(
         best_solution, container_width, container_height, container_depth,
         box_list, box_order
@@ -201,7 +214,6 @@ def run_tabu_search(
         final_order.append(box_idx)
         if original_box.id in placed_ids:
             placed = placed_ids[original_box.id]
-            # gasim orientarea
             allowed = original_box.get_allowed_orientations()
             placed_dims = (placed.width, placed.height, placed.depth)
             try:
@@ -213,6 +225,12 @@ def run_tabu_search(
             final_orientations.append(0)
 
     execution_time = time.time() - start_time
+
+    fitness_history = [(h["iteration"], h["best_fitness"]) for h in history]
+
+    # metrici pentru solutia finala
+    placed_count = len(final_container.placed_boxes)
+    fill_percentage = (best_fitness / container_volume) * 100 if container_volume > 0 else 0
 
     return {
         "best_individual": [final_order, final_orientations],
@@ -228,4 +246,11 @@ def run_tabu_search(
         "execution_time": execution_time,
         "iterations_run": iteration,
         "stopped_early": stopped_early,
+        "stop_reason": stop_reason,
+        "total_evaluations": total_evaluations,
+        "fitness_history": fitness_history,
+
+        "placed_boxes": placed_count,
+        "total_boxes": number_of_boxes,
+        "fill_percentage": fill_percentage,
     }

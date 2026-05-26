@@ -1,15 +1,3 @@
-"""
-Generatoare de date de test pentru 3D Bin Packing.
-
-4 tipuri de teste:
-    1. Unit Cubes        - container LxlxH, cutii 1x1x1 (sanity check, fill teoretic 100%)
-    2. Perfect Cubes     - container cub LxLxL, n^3 cutii de (L/n)^3 (sanity check, fill teoretic 100%)
-    3. Mixed Fit         - container cub LxLxL, cutii mixte cu volum total = L^3 (discriminativ)
-    4. Realistic         - dimensiuni alese de user, cutii random (discriminativ)
-
-Toate testele cu randomizare folosesc seed fix pentru reproducibilitate.
-"""
-
 import json
 import random
 import os
@@ -18,16 +6,7 @@ from geometry import Box
 TEST_DATA_FILE = "last_test_data.json"
 DEFAULT_SEED = 42
 
-
-# ============================================================
-# GENERATORS
-# ============================================================
-
 def generate_unit_cubes(container_width, container_height, container_depth):
-    """
-    Test 1: Cutii 1x1x1 care umplu perfect containerul.
-    Nr cutii = W * H * D. Fill teoretic 100%.
-    """
     boxes = []
     total = int(container_width) * int(container_height) * int(container_depth)
     for i in range(1, total + 1):

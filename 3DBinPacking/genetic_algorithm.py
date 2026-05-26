@@ -13,7 +13,6 @@ if not hasattr(creator, "Individual"):
     creator.create("Individual", list, fitness=creator.FitnessMax)
 
 
-# toleranta pentru comparatii de volum (evitam probleme de floating point)
 VOLUME_TOLERANCE = 1e-6
 
 
@@ -76,6 +75,38 @@ def custom_mutation(individual, probability_order=0.05, probability_orientation=
     return (individual,)
 
 
+def _compute_solution_metrics(individual, container_width, container_height, container_depth, original_boxes):
+    """Calculeaza metrici pentru o solutie: fill%, nr cutii plasate, total cutii."""
+    test_container = Container(container_width, container_height, container_depth)
+    heuristic = ExtremePointsHeuristic(test_container)
+
+    order = individual[0]
+    orientations = individual[1]
+
+    for index in range(len(order)):
+        box_index = order[index]
+        orientation_index = orientations[index]
+        original_box = original_boxes[box_index]
+        box = Box(original_box.id, original_box.width, original_box.height, original_box.depth)
+        allowed_orientations = box.get_allowed_orientations()
+        safe_orientation_index = orientation_index % len(allowed_orientations)
+        width, height, depth = allowed_orientations[safe_orientation_index]
+        box.rotate(width, height, depth)
+        heuristic.pack_box(box)
+
+    occupied_volume = sum(b.width * b.height * b.depth for b in test_container.placed_boxes)
+    container_volume = container_width * container_height * container_depth
+    fill_percentage = (occupied_volume / container_volume) * 100 if container_volume > 0 else 0
+
+    return {
+        "placed_boxes": len(test_container.placed_boxes),
+        "total_boxes": len(original_boxes),
+        "fill_percentage": fill_percentage,
+        "occupied_volume": occupied_volume,
+        "container_volume": container_volume,
+    }
+
+
 def run_genetic_algorithm(
     container_width,
     container_height,
@@ -92,7 +123,6 @@ def run_genetic_algorithm(
     start_time = time.time()
 
     number_of_boxes = len(box_list)
-
     container_volume = container_width * container_height * container_depth
 
     elitism_count = max(1, int(elitism_ratio * population_size)) if elitism_ratio > 0 else 0
@@ -120,7 +150,9 @@ def run_genetic_algorithm(
         toolbox.register("map", executor.map)
 
     stopped_early = False
+    stop_reason = "max_iterations"  # default: am rulat tot bugetul
     generations_completed = 0
+    total_evaluations = 0
 
     try:
         population = toolbox.population(n=population_size)
@@ -136,10 +168,10 @@ def run_genetic_algorithm(
         logbook = tools.Logbook()
         logbook.header = ["gen", "avg", "max", "min"]
 
-        # evaluare initiala
         fitnesses = list(toolbox.map(toolbox.evaluate, population))
         for ind, fit in zip(population, fitnesses):
             ind.fitness.values = fit
+        total_evaluations += len(population)
 
         hall_of_fame.update(population)
 
@@ -147,15 +179,13 @@ def run_genetic_algorithm(
         logbook.record(gen=0, **record)
         if progress_callback is not None:
             progress_callback({
-                "gen": 0,
-                "avg": record["avg"],
-                "max": record["max"],
-                "min": record["min"],
-                "best_so_far": hall_of_fame[0].fitness.values[0],
+                "gen": 0, "avg": record["avg"], "max": record["max"],
+                "min": record["min"], "best_so_far": hall_of_fame[0].fitness.values[0],
             })
 
         if hall_of_fame[0].fitness.values[0] >= container_volume - VOLUME_TOLERANCE:
             stopped_early = True
+            stop_reason = "optimal_fill"
         else:
             for generation in range(1, maximum_generations + 1):
                 offspring = algorithms.varAnd(population, toolbox, crossover_probability, mutation_probability)
@@ -164,6 +194,7 @@ def run_genetic_algorithm(
                 fitnesses = list(toolbox.map(toolbox.evaluate, invalid))
                 for ind, fit in zip(invalid, fitnesses):
                     ind.fitness.values = fit
+                total_evaluations += len(invalid)
 
                 hall_of_fame.update(offspring)
 
@@ -180,16 +211,13 @@ def run_genetic_algorithm(
 
                 if progress_callback is not None:
                     progress_callback({
-                        "gen": generation,
-                        "avg": record["avg"],
-                        "max": record["max"],
-                        "min": record["min"],
-                        "best_so_far": hall_of_fame[0].fitness.values[0],
+                        "gen": generation, "avg": record["avg"], "max": record["max"],
+                        "min": record["min"], "best_so_far": hall_of_fame[0].fitness.values[0],
                     })
 
-                # EARLY STOPPING: daca am atins fill 100%, oprim
                 if hall_of_fame[0].fitness.values[0] >= container_volume - VOLUME_TOLERANCE:
                     stopped_early = True
+                    stop_reason = "optimal_fill"
                     break
 
     finally:
@@ -197,6 +225,17 @@ def run_genetic_algorithm(
             executor.shutdown(wait=True)
 
     execution_time = time.time() - start_time
+
+    fitness_history = []
+    best_so_far = 0
+    for rec in logbook:
+        best_so_far = max(best_so_far, rec["max"])
+        fitness_history.append((rec["gen"], best_so_far))
+
+    # calculam metrici pentru cel mai bun individ
+    best_metrics = _compute_solution_metrics(
+        hall_of_fame[0], container_width, container_height, container_depth, box_list
+    )
 
     return {
         "best_individual": hall_of_fame[0],
@@ -214,4 +253,11 @@ def run_genetic_algorithm(
         "execution_time": execution_time,
         "generations_run": generations_completed,
         "stopped_early": stopped_early,
+        "stop_reason": stop_reason,
+        "total_evaluations": total_evaluations,
+        "fitness_history": fitness_history,
+
+        "placed_boxes": best_metrics["placed_boxes"],
+        "total_boxes": best_metrics["total_boxes"],
+        "fill_percentage": best_metrics["fill_percentage"],
     }

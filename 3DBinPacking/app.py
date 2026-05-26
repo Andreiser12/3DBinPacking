@@ -8,6 +8,7 @@ from geometry import Container, Box
 from constructive import ExtremePointsHeuristic
 from genetic_algorithm import run_genetic_algorithm
 from tabu_search import run_tabu_search
+from comparison_window import ComparisonWindow
 from test_generators import (
     generate_unit_cubes,
     generate_perfect_cubes,
@@ -49,9 +50,9 @@ class App(ctk.CTk):
         self.best_orientations = []
         self.best_boxes_reference = []
 
-        # ============================================================
-        # LEFT PANEL - cu tab-uri
-        # ============================================================
+        self.last_ga_result = None
+        self.last_ts_result = None
+
         self.left_frame = ctk.CTkFrame(self, width=280, corner_radius=0)
         self.left_frame.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=10, pady=10)
         self.left_frame.grid_propagate(False)
@@ -59,12 +60,11 @@ class App(ctk.CTk):
         self.tabview = ctk.CTkTabview(self.left_frame, width=260)
         self.tabview.pack(fill="x", padx=5, pady=5)
 
-        self.tabview.add("Basic")
+        self.tabview.add("Main Menu")
         self.tabview.add("Genetic Algorithm")
         self.tabview.add("Tabu Search")
 
-        # ---------- TAB BASIC ----------
-        basic_tab = self.tabview.tab("Basic")
+        basic_tab = self.tabview.tab("Main Menu")
 
         ctk.CTkLabel(basic_tab, text="Optimization Method:").pack(anchor="w", padx=5, pady=(5, 0))
         self.method_variable = ctk.StringVar(value="Genetic Algorithm")
@@ -113,7 +113,21 @@ class App(ctk.CTk):
         )
         self.label_data_status.pack(anchor="w", padx=5, pady=(0, 5))
 
-        # ---------- TAB GA ----------
+        self.btn_compare = ctk.CTkButton(
+            basic_tab, text="Show Comparison",
+            fg_color="#8338ec", hover_color="#5a25a3",
+            command=self.show_comparison,
+            state="disabled"
+        )
+        self.btn_compare.pack(fill="x", padx=5, pady=(10, 5))
+
+        self.label_compare_status = ctk.CTkLabel(
+            basic_tab, text="GA: not run | TS: not run",
+            text_color="gray",
+            font=ctk.CTkFont(size=10, slant="italic")
+        )
+        self.label_compare_status.pack(anchor="w", padx=5, pady=(0, 5))
+
         ga_tab = self.tabview.tab("Genetic Algorithm")
 
         ctk.CTkLabel(ga_tab, text="Population Size:").pack(anchor="w", padx=5, pady=(5, 0))
@@ -126,22 +140,22 @@ class App(ctk.CTk):
         self.entry_generations.pack(fill="x", padx=5, pady=(0, 10))
         self.entry_generations.insert(0, "40")
 
-        self.label_crossover = ctk.CTkLabel(ga_tab, text="Crossover Probability: 0.70")
+        self.label_crossover = ctk.CTkLabel(ga_tab, text="Crossover Probability: 0.50")
         self.label_crossover.pack(anchor="w", padx=5, pady=(10, 0))
         self.slider_crossover = ctk.CTkSlider(
             ga_tab, from_=0.0, to=1.0, number_of_steps=100,
             command=self._update_crossover_label
         )
-        self.slider_crossover.set(0.7)
+        self.slider_crossover.set(0.5)
         self.slider_crossover.pack(fill="x", padx=5, pady=(0, 10))
 
-        self.label_mutation = ctk.CTkLabel(ga_tab, text="Mutation Probability: 0.20")
+        self.label_mutation = ctk.CTkLabel(ga_tab, text="Mutation Probability: 0.0")
         self.label_mutation.pack(anchor="w", padx=5, pady=(5, 0))
         self.slider_mutation = ctk.CTkSlider(
-            ga_tab, from_=0.0, to=0.5, number_of_steps=50,
+            ga_tab, from_=0.0, to=0.1, number_of_steps=10,
             command=self._update_mutation_label
         )
-        self.slider_mutation.set(0.2)
+        self.slider_mutation.set(0.0)
         self.slider_mutation.pack(fill="x", padx=5, pady=(0, 10))
 
         self.label_elitism = ctk.CTkLabel(ga_tab, text="Elitism Ratio: 0.00")
@@ -153,7 +167,6 @@ class App(ctk.CTk):
         self.slider_elitism.set(0.0)
         self.slider_elitism.pack(fill="x", padx=5, pady=(0, 10))
 
-        # ---------- TAB TS ----------
         ts_tab = self.tabview.tab("Tabu Search")
 
         ctk.CTkLabel(ts_tab, text="Max Iterations:").pack(anchor="w", padx=5, pady=(5, 0))
@@ -171,7 +184,6 @@ class App(ctk.CTk):
         self.entry_ts_tabu_size.pack(fill="x", padx=5, pady=(0, 10))
         self.entry_ts_tabu_size.insert(0, "20")
 
-        # ---------- STATISTICS BOX ----------
         ctk.CTkLabel(
             self.left_frame, text="Execution Statistics:",
             font=ctk.CTkFont(size=16, weight="bold")
@@ -179,9 +191,6 @@ class App(ctk.CTk):
         self.statistics_box = ctk.CTkTextbox(self.left_frame, height=200)
         self.statistics_box.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # ============================================================
-        # PLOT FRAME
-        # ============================================================
         self.plot_frame = ctk.CTkFrame(self)
         self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
 
@@ -195,9 +204,6 @@ class App(ctk.CTk):
         self.canvas.draw_idle()
         self.update_idletasks()
 
-        # ============================================================
-        # BOTTOM FRAME
-        # ============================================================
         self.bottom_frame = ctk.CTkFrame(self, height=80, corner_radius=0)
         self.bottom_frame.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=10)
         self.bottom_frame.grid_columnconfigure(0, weight=1)
@@ -230,9 +236,6 @@ class App(ctk.CTk):
 
         self.init_empty_plot()
 
-    # ============================================================
-    # SLIDER LABEL UPDATERS
-    # ============================================================
     def _update_crossover_label(self, value):
         self.label_crossover.configure(text=f"Crossover Probability: {float(value):.2f}")
 
@@ -242,9 +245,26 @@ class App(ctk.CTk):
     def _update_elitism_label(self, value):
         self.label_elitism.configure(text=f"Elitism Ratio: {float(value):.2f}")
 
-    # ============================================================
-    # TEST TYPE CHANGE
-    # ============================================================
+    def _update_compare_button_state(self):
+        ga_status = "OK" if self.last_ga_result is not None else "not run"
+        ts_status = "OK" if self.last_ts_result is not None else "not run"
+        self.label_compare_status.configure(text=f"GA: {ga_status} | TS: {ts_status}")
+
+        if self.last_ga_result is not None and self.last_ts_result is not None:
+            self.btn_compare.configure(state="normal")
+        else:
+            self.btn_compare.configure(state="disabled")
+
+    def _reset_comparison_results(self):
+        self.last_ga_result = None
+        self.last_ts_result = None
+        self._update_compare_button_state()
+
+    def show_comparison(self):
+        if self.last_ga_result is None or self.last_ts_result is None:
+            return
+        ComparisonWindow(self, self.last_ga_result, self.last_ts_result)
+
     def _on_test_type_changed(self, choice):
         test_id = TEST_TYPES[choice]
         if test_id == "unit_cubes":
@@ -254,11 +274,11 @@ class App(ctk.CTk):
             self.entry_boxes.configure(state="normal")
             self.entry_dimensions.configure(state="normal")
 
-    # ============================================================
-    # GENERATE TEST DATA
-    # ============================================================
     def generate_test_data(self):
         self.statistics_box.delete("0.0", "end")
+
+        self._reset_comparison_results()
+
         try:
             test_choice = self.test_type_variable.get()
             test_id = TEST_TYPES[test_choice]
@@ -314,9 +334,6 @@ class App(ctk.CTk):
             self.statistics_box.insert("end", f"[!] ERROR:\n{traceback.format_exc()}\n")
             self.label_data_status.configure(text="Generation failed", text_color="#e63946")
 
-    # ============================================================
-    # PLOT METHODS
-    # ============================================================
     def get_inputs(self):
         dimensions_string = self.entry_dimensions.get().split(',')
         try:
@@ -426,9 +443,6 @@ class App(ctk.CTk):
             
         self.draw_packed_container(temp_container, extreme_points_list=heuristic.extreme_points_list)
 
-    # ============================================================
-    # OPTIMIZATION FLOW
-    # ============================================================
     def run_optimization(self):
         self.statistics_box.delete("0.0", "end")
 
@@ -448,7 +462,6 @@ class App(ctk.CTk):
 
             selected_method = self.method_variable.get()
 
-            # citim parametrii in functie de metoda aleasa
             if selected_method == "Genetic Algorithm":
                 method_params = {
                     "population_size": int(self.entry_population.get()),
@@ -457,7 +470,7 @@ class App(ctk.CTk):
                     "mutation_probability": float(self.slider_mutation.get()),
                     "elitism_ratio": float(self.slider_elitism.get()),
                 }
-            else:  # Tabu Search
+            else:
                 method_params = {
                     "max_iterations": int(self.entry_ts_iterations.get()),
                     "max_iterations_without_improvement": int(self.entry_ts_no_improve.get()),
@@ -520,8 +533,11 @@ class App(ctk.CTk):
                     "stopped_early": result["stopped_early"],
                     "max_iterations": method_params["maximum_generations"],
                     "iter_label": "Generations",
+                    "total_evaluations": result["total_evaluations"],
+                    "full_result": result,
+                    "method": "GA",
                 }
-            else:  # Tabu Search
+            else:
                 result = run_tabu_search(
                     width, height, depth, test_boxes,
                     **method_params
@@ -533,6 +549,9 @@ class App(ctk.CTk):
                     "stopped_early": result["stopped_early"],
                     "max_iterations": method_params["max_iterations"],
                     "iter_label": "Iterations",
+                    "total_evaluations": result["total_evaluations"],
+                    "full_result": result,
+                    "method": "TS",
                 }
                 
             self.thread_queue.put(("success", (width, height, depth, test_boxes, best_individual, number_of_boxes, extra_info)))
@@ -582,6 +601,7 @@ class App(ctk.CTk):
 
         if extra_info:
             self.statistics_box.insert("end", f"Execution Time: {extra_info['execution_time']:.2f}s\n")
+            self.statistics_box.insert("end", f"Total Evaluations: {extra_info['total_evaluations']}\n")
             iter_label = extra_info.get("iter_label", "Iterations")
             if extra_info.get("stopped_early"):
                 self.statistics_box.insert(
@@ -594,13 +614,19 @@ class App(ctk.CTk):
                     "end",
                     f"{iter_label}: {extra_info['iterations_run']} / {extra_info['max_iterations']}\n"
                 )
+
+        if extra_info.get("method") == "GA":
+            self.last_ga_result = extra_info["full_result"]
+        elif extra_info.get("method") == "TS":
+            self.last_ts_result = extra_info["full_result"]
+
+        self._update_compare_button_state()
         
         self.btn_start.configure(state="normal", text="START")
 
     def _optimization_error(self, error_message):
         self.statistics_box.insert("end", f"\n[!] EXECUTION ERROR: {error_message}")
         self.btn_start.configure(state="normal", text="START")
-
 
 if __name__ == "__main__":
     app = App()
