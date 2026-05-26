@@ -3,7 +3,8 @@ import random
 import os
 from geometry import Box
 
-TEST_DATA_FILE = "last_test_data.json"
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_DATA_FILE = os.path.join(_MODULE_DIR, "last_test_data.json")
 DEFAULT_SEED = 42
 
 def generate_unit_cubes(container_width, container_height, container_depth):
@@ -15,11 +16,6 @@ def generate_unit_cubes(container_width, container_height, container_depth):
 
 
 def generate_perfect_cubes(container_side, number_of_boxes):
-    """
-    Test 2: Cub LxLxL spart in n^3 cutii egale de (L/n)^3.
-    Validare: number_of_boxes trebuie sa fie cub perfect.
-    """
-    # verificam ca number_of_boxes e cub perfect
     n = round(number_of_boxes ** (1.0 / 3.0))
     if n ** 3 != number_of_boxes:
         raise ValueError(
@@ -35,33 +31,21 @@ def generate_perfect_cubes(container_side, number_of_boxes):
 
 
 def generate_mixed_fit(container_side, number_of_boxes, seed=DEFAULT_SEED):
-    """
-    Test 3: Cub LxLxL spart in N bucati cu volume mixte.
-    Algoritm: recursive splitting - alegem o cutie la intamplare, o spargem pe o axa.
-    Suma volumelor = L^3 (fill teoretic 100% daca algoritmul gaseste asezarea).
-    """
     rng = random.Random(seed)
 
-    # incepem cu o singura "cutie" = containerul intreg
-    # reprezentam fiecare cutie ca (w, h, d)
     pieces = [(container_side, container_side, container_side)]
 
     while len(pieces) < number_of_boxes:
-        # alegem cea mai mare cutie (ca sa avem ce sparge)
-        # sortam descrescator dupa volum si luam prima
+
         pieces.sort(key=lambda p: p[0] * p[1] * p[2], reverse=True)
         biggest = pieces.pop(0)
         w, h, d = biggest
 
-        # alegem axa pe care spargem (cea mai lunga, ca sa avem loc)
         max_dim = max(w, h, d)
         if max_dim < 2:
-            # nu mai putem sparge nimic util, oprim
             pieces.append(biggest)
             break
 
-        # alegem un punct de taiere intre 1 si max_dim - 1
-        # (ca sa avem ambele bucati cu dim >= 1)
         if w == max_dim:
             cut = rng.uniform(1, w - 1)
             piece_a = (cut, h, d)
@@ -78,19 +62,13 @@ def generate_mixed_fit(container_side, number_of_boxes, seed=DEFAULT_SEED):
         pieces.append(piece_a)
         pieces.append(piece_b)
 
-    # rotunjim dimensiunile la 2 zecimale ca sa fie mai usor de vizualizat
     boxes = []
     for i, (w, h, d) in enumerate(pieces, start=1):
         boxes.append(Box(i, round(w, 2), round(h, 2), round(d, 2)))
     return container_side, container_side, container_side, boxes
 
-
 def generate_realistic(container_width, container_height, container_depth,
                        number_of_boxes, seed=DEFAULT_SEED):
-    """
-    Test 4: Cutii random cu dimensiuni variate (cum era logica veche).
-    Seed fix => reproducibil pentru comparatie GA vs SA.
-    """
     rng = random.Random(seed)
     boxes = []
     for i in range(1, number_of_boxes + 1):
@@ -104,13 +82,7 @@ def generate_realistic(container_width, container_height, container_depth,
         boxes.append(box)
     return container_width, container_height, container_depth, boxes
 
-
-# ============================================================
-# SAVE / LOAD
-# ============================================================
-
 def save_test_data(container_width, container_height, container_depth, boxes, test_type):
-    """Salveaza datele intr-un fisier JSON simplu."""
     data = {
         "test_type": test_type,
         "container": {
@@ -128,7 +100,6 @@ def save_test_data(container_width, container_height, container_depth, boxes, te
 
 
 def load_test_data():
-    """Incarca datele din fisier. Returneaza (container_dims, boxes, test_type) sau None daca nu exista."""
     if not os.path.exists(TEST_DATA_FILE):
         return None
 
@@ -150,5 +121,4 @@ def load_test_data():
 
 
 def test_data_exists():
-    """Verifica daca exista date de test salvate."""
     return os.path.exists(TEST_DATA_FILE)

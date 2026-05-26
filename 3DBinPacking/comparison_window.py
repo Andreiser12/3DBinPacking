@@ -110,13 +110,13 @@ class ComparisonWindow(ctk.CTkToplevel):
         ts_iters = ts.get("iterations_run", 0)
 
         rows = [
-            ("Metric", "GA", "TS", True),
+            ("Metric", "Genetic Algorithm", "Tabu Search", True),
             ("Best Fitness", f"{ga_fitness:.2f}", f"{ts_fitness:.2f}", False),
             ("Fill Percentage", f"{ga_fill:.2f}%", f"{ts_fill:.2f}%", False),
             ("Placed Boxes", f"{ga_placed}/{ga_total}", f"{ts_placed}/{ts_total}", False),
             ("Total Evaluations", f"{ga_evals}", f"{ts_evals}", False),
             ("Execution Time", f"{ga_time:.2f}s", f"{ts_time:.2f}s", False),
-            ("Iterations / Generations", f"{ga_iters}", f"{ts_iters}", False),
+            ("Generations / Iterations", f"{ga_iters}", f"{ts_iters}", False),
         ]
 
         table = ctk.CTkFrame(table_frame, fg_color="transparent")
