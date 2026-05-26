@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from geometry import Container, Box
 from constructive import ExtremePointsHeuristic
 from genetic_algorithm import run_genetic_algorithm
-from simulated_annealing import run_simulated_annealing
+from tabu_search import run_tabu_search
 from test_generators import (
     generate_unit_cubes,
     generate_perfect_cubes,
@@ -23,7 +23,6 @@ import queue
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
-# numele testelor din dropdown -> identificator intern
 TEST_TYPES = {
     "Test 1: Unit Cubes": "unit_cubes",
     "Test 2: Perfect Cubes": "perfect_cubes",
@@ -61,8 +60,8 @@ class App(ctk.CTk):
         self.tabview.pack(fill="x", padx=5, pady=5)
 
         self.tabview.add("Basic")
-        self.tabview.add("GA")
-        self.tabview.add("SA")
+        self.tabview.add("Genetic Algorithm")
+        self.tabview.add("Tabu Search")
 
         # ---------- TAB BASIC ----------
         basic_tab = self.tabview.tab("Basic")
@@ -71,7 +70,7 @@ class App(ctk.CTk):
         self.method_variable = ctk.StringVar(value="Genetic Algorithm")
         self.dropdown_method = ctk.CTkOptionMenu(
             basic_tab,
-            values=["Genetic Algorithm", "Simulated Annealing"],
+            values=["Genetic Algorithm", "Tabu Search"],
             variable=self.method_variable
         )
         self.dropdown_method.pack(fill="x", padx=5, pady=(0, 10))
@@ -101,7 +100,6 @@ class App(ctk.CTk):
         )
         self.btn_update_environment.pack(fill="x", padx=5, pady=(10, 5))
 
-        # buton NOU: Generate Test Data
         self.btn_generate_data = ctk.CTkButton(
             basic_tab, text="Generate Test Data",
             fg_color="#4a9eff", hover_color="#2d7ed0",
@@ -109,7 +107,6 @@ class App(ctk.CTk):
         )
         self.btn_generate_data.pack(fill="x", padx=5, pady=5)
 
-        # label cu statusul datelor
         self.label_data_status = ctk.CTkLabel(
             basic_tab, text="No data generated", text_color="gray",
             font=ctk.CTkFont(size=11, slant="italic")
@@ -117,7 +114,7 @@ class App(ctk.CTk):
         self.label_data_status.pack(anchor="w", padx=5, pady=(0, 5))
 
         # ---------- TAB GA ----------
-        ga_tab = self.tabview.tab("GA")
+        ga_tab = self.tabview.tab("Genetic Algorithm")
 
         ctk.CTkLabel(ga_tab, text="Population Size:").pack(anchor="w", padx=5, pady=(5, 0))
         self.entry_population = ctk.CTkEntry(ga_tab)
@@ -156,12 +153,23 @@ class App(ctk.CTk):
         self.slider_elitism.set(0.0)
         self.slider_elitism.pack(fill="x", padx=5, pady=(0, 10))
 
-        # ---------- TAB SA ----------
-        sa_tab = self.tabview.tab("SA")
-        ctk.CTkLabel(
-            sa_tab, text="SA settings coming soon",
-            font=ctk.CTkFont(size=12, slant="italic"), text_color="gray"
-        ).pack(pady=20)
+        # ---------- TAB TS ----------
+        ts_tab = self.tabview.tab("Tabu Search")
+
+        ctk.CTkLabel(ts_tab, text="Max Iterations:").pack(anchor="w", padx=5, pady=(5, 0))
+        self.entry_ts_iterations = ctk.CTkEntry(ts_tab)
+        self.entry_ts_iterations.pack(fill="x", padx=5, pady=(0, 10))
+        self.entry_ts_iterations.insert(0, "100")
+
+        ctk.CTkLabel(ts_tab, text="Max Iterations w/o Improvement:").pack(anchor="w", padx=5, pady=(5, 0))
+        self.entry_ts_no_improve = ctk.CTkEntry(ts_tab)
+        self.entry_ts_no_improve.pack(fill="x", padx=5, pady=(0, 10))
+        self.entry_ts_no_improve.insert(0, "15")
+
+        ctk.CTkLabel(ts_tab, text="Tabu List Size:").pack(anchor="w", padx=5, pady=(5, 0))
+        self.entry_ts_tabu_size = ctk.CTkEntry(ts_tab)
+        self.entry_ts_tabu_size.pack(fill="x", padx=5, pady=(0, 10))
+        self.entry_ts_tabu_size.insert(0, "20")
 
         # ---------- STATISTICS BOX ----------
         ctk.CTkLabel(
@@ -215,7 +223,6 @@ class App(ctk.CTk):
         )
         self.btn_start.grid(row=0, column=1, padx=20, pady=15)
 
-        # verifica daca exista date salvate de la o rulare anterioara
         if test_data_exists():
             self.label_data_status.configure(
                 text="Data loaded from previous session", text_color="#2FA572"
@@ -236,12 +243,11 @@ class App(ctk.CTk):
         self.label_elitism.configure(text=f"Elitism Ratio: {float(value):.2f}")
 
     # ============================================================
-    # TEST TYPE CHANGE - dezactiveaza entries irelevante
+    # TEST TYPE CHANGE
     # ============================================================
     def _on_test_type_changed(self, choice):
         test_id = TEST_TYPES[choice]
         if test_id == "unit_cubes":
-            # nr cutii e calculat automat = W*H*D
             self.entry_boxes.configure(state="disabled")
             self.entry_dimensions.configure(state="normal")
         else:
@@ -252,7 +258,6 @@ class App(ctk.CTk):
     # GENERATE TEST DATA
     # ============================================================
     def generate_test_data(self):
-        """Genereaza cutiile pe baza testului ales si le salveaza in JSON."""
         self.statistics_box.delete("0.0", "end")
         try:
             test_choice = self.test_type_variable.get()
@@ -265,7 +270,6 @@ class App(ctk.CTk):
                 w, h, d, boxes = generate_unit_cubes(width, height, depth)
 
             elif test_id == "perfect_cubes":
-                # for container cub: folosim W ca latura (assume user pune W=H=D)
                 if not (width == height == depth):
                     self.statistics_box.insert(
                         "end",
@@ -299,7 +303,6 @@ class App(ctk.CTk):
                 text_color="#2FA572"
             )
 
-            # actualizam plot-ul cu containerul gol nou
             self.entry_dimensions.delete(0, "end")
             self.entry_dimensions.insert(0, f"{w}, {h}, {d}")
             self.init_empty_plot()
@@ -429,7 +432,6 @@ class App(ctk.CTk):
     def run_optimization(self):
         self.statistics_box.delete("0.0", "end")
 
-        # verificam ca exista date generate
         if not test_data_exists():
             self.statistics_box.insert(
                 "end",
@@ -441,18 +443,27 @@ class App(ctk.CTk):
         self.slider_generation.configure(state="disabled") 
 
         try:
-            # incarcam datele din JSON
             width, height, depth, test_boxes, test_type = load_test_data()
             number_of_boxes = len(test_boxes)
 
-            population_size = int(self.entry_population.get())
-            number_of_generations = int(self.entry_generations.get())
-            crossover_probability = float(self.slider_crossover.get())
-            mutation_probability = float(self.slider_mutation.get())
-            elitism_ratio = float(self.slider_elitism.get())
-
             selected_method = self.method_variable.get()
-            
+
+            # citim parametrii in functie de metoda aleasa
+            if selected_method == "Genetic Algorithm":
+                method_params = {
+                    "population_size": int(self.entry_population.get()),
+                    "maximum_generations": int(self.entry_generations.get()),
+                    "crossover_probability": float(self.slider_crossover.get()),
+                    "mutation_probability": float(self.slider_mutation.get()),
+                    "elitism_ratio": float(self.slider_elitism.get()),
+                }
+            else:  # Tabu Search
+                method_params = {
+                    "max_iterations": int(self.entry_ts_iterations.get()),
+                    "max_iterations_without_improvement": int(self.entry_ts_no_improve.get()),
+                    "tabu_list_size": int(self.entry_ts_tabu_size.get()),
+                }
+
             self.statistics_box.insert(
                 "end",
                 f"[*] Loaded {number_of_boxes} boxes (test: {test_type})\n"
@@ -460,11 +471,20 @@ class App(ctk.CTk):
                 f"[*] Starting {selected_method}...\n"
             )
             if selected_method == "Genetic Algorithm":
+                p = method_params
                 self.statistics_box.insert(
                     "end",
-                    f"    Config: pop={population_size}, gens={number_of_generations}, "
-                    f"cx={crossover_probability:.2f}, mut={mutation_probability:.2f}, "
-                    f"elit={elitism_ratio:.2f}\n"
+                    f"    Config: pop={p['population_size']}, gens={p['maximum_generations']}, "
+                    f"cx={p['crossover_probability']:.2f}, mut={p['mutation_probability']:.2f}, "
+                    f"elit={p['elitism_ratio']:.2f}\n"
+                )
+            else:
+                p = method_params
+                self.statistics_box.insert(
+                    "end",
+                    f"    Config: max_iter={p['max_iterations']}, "
+                    f"no_improve={p['max_iterations_without_improvement']}, "
+                    f"tabu_size={p['tabu_list_size']}\n"
                 )
             
             self.thread_queue = queue.Queue()
@@ -472,9 +492,7 @@ class App(ctk.CTk):
                 target=self._optimization_thread,
                 args=(
                     width, height, depth, test_boxes,
-                    population_size, number_of_generations,
-                    number_of_boxes, selected_method,
-                    crossover_probability, mutation_probability, elitism_ratio,
+                    number_of_boxes, selected_method, method_params,
                 )
             )
             thread.daemon = True 
@@ -486,35 +504,36 @@ class App(ctk.CTk):
             self.btn_start.configure(state="normal", text="START")
 
     def _optimization_thread(self, width, height, depth, test_boxes,
-                             population_size, number_of_generations,
-                             number_of_boxes, selected_method,
-                             crossover_probability, mutation_probability, elitism_ratio):
+                             number_of_boxes, selected_method, method_params):
         try:
             extra_info = {}
             if selected_method == "Genetic Algorithm":
                 result = run_genetic_algorithm(
-                    width, height, depth, test_boxes, 
-                    population_size=population_size, 
-                    maximum_generations=number_of_generations,
-                    crossover_probability=crossover_probability,
-                    mutation_probability=mutation_probability,
-                    elitism_ratio=elitism_ratio,
-                    use_parallel=False
+                    width, height, depth, test_boxes,
+                    use_parallel=False,
+                    **method_params
                 )
                 best_individual = result["best_individual"]
                 extra_info = {
                     "execution_time": result["execution_time"],
-                    "generations_run": result["generations_run"],
+                    "iterations_run": result["generations_run"],
                     "stopped_early": result["stopped_early"],
-                    "maximum_generations": number_of_generations,
+                    "max_iterations": method_params["maximum_generations"],
+                    "iter_label": "Generations",
                 }
-            else:
-                best_individual, logbook = run_simulated_annealing(
+            else:  # Tabu Search
+                result = run_tabu_search(
                     width, height, depth, test_boxes,
-                    initial_temperature=1000.0,
-                    cooling_rate=0.95,
-                    iterations_per_temperature=number_of_generations
+                    **method_params
                 )
+                best_individual = result["best_individual"]
+                extra_info = {
+                    "execution_time": result["execution_time"],
+                    "iterations_run": result["iterations_run"],
+                    "stopped_early": result["stopped_early"],
+                    "max_iterations": method_params["max_iterations"],
+                    "iter_label": "Iterations",
+                }
                 
             self.thread_queue.put(("success", (width, height, depth, test_boxes, best_individual, number_of_boxes, extra_info)))
         except Exception:
@@ -561,19 +580,19 @@ class App(ctk.CTk):
         self.statistics_box.insert("end", f"Fill Percentage: {fill_percentage:.2f}%\n")
         self.statistics_box.insert("end", f"Placed Boxes: {len(temp_container.placed_boxes)} / {number_of_boxes}\n")
 
-        # info despre early stopping si timp (doar pentru GA momentan)
         if extra_info:
             self.statistics_box.insert("end", f"Execution Time: {extra_info['execution_time']:.2f}s\n")
+            iter_label = extra_info.get("iter_label", "Iterations")
             if extra_info.get("stopped_early"):
                 self.statistics_box.insert(
                     "end",
-                    f"[OK] Early stopping at gen {extra_info['generations_run']} "
-                    f"(reached 100% fill before max {extra_info['maximum_generations']})\n"
+                    f"[OK] Early stopping at {iter_label.lower()[:-1]} {extra_info['iterations_run']} "
+                    f"(reached 100% fill before max {extra_info['max_iterations']})\n"
                 )
             else:
                 self.statistics_box.insert(
                     "end",
-                    f"Generations: {extra_info['generations_run']} / {extra_info['maximum_generations']}\n"
+                    f"{iter_label}: {extra_info['iterations_run']} / {extra_info['max_iterations']}\n"
                 )
         
         self.btn_start.configure(state="normal", text="START")

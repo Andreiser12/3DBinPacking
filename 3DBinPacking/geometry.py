@@ -1,5 +1,7 @@
 import itertools
 
+EPSILON = 1e-6
+
 class Box:
     def __init__(self, box_id: int, width: float, height: float, depth: float):
         self.id: int = box_id
@@ -9,9 +11,7 @@ class Box:
         self.x: float = None
         self.y: float = None
         self.z: float = None
-        
         self.is_placed: bool = False
-        
         
     def place(self, x: float, y: float, z: float) -> None:
         self.x = x
@@ -59,7 +59,45 @@ class Container:
             return False
             
         return True
-    
+
+
+    def is_stable(self, box) -> bool:
+        """
+        Verifica stabilitatea cutiei folosind Center of Mass.
+        Centrul bazei cutiei trebuie sa fie deasupra unei suprafete solide:
+            - podeaua (z=0), SAU
+            - fata de sus a unei cutii deja plasate (cu acelasi z)
+        
+        Centrul bazei = (x + width/2, y + height/2) la inaltimea z.
+        """
+        # cazul 1: cutia e pe podea -> stabila
+        if box.z <= EPSILON:
+            return True
+
+        # calculam centrul bazei cutiei
+        center_x = box.x + box.width / 2.0
+        center_y = box.y + box.height / 2.0
+
+        # cautam o cutie de dedesubt al carei top sa fie la z-ul nostru
+        # si al carei top sa contina centrul bazei noastre
+        for placed_box in self.placed_boxes:
+            placed_top_z = placed_box.z + placed_box.depth
+
+            # verificam ca fata de sus a cutiei plasate e la acelasi nivel z cu baza noastra
+            if abs(placed_top_z - box.z) > EPSILON:
+                continue
+
+            # verificam daca centrul bazei noastre e deasupra cutiei plasate
+            # (in proiectia pe planul xy)
+            inside_x = placed_box.x - EPSILON <= center_x <= placed_box.x + placed_box.width + EPSILON
+            inside_y = placed_box.y - EPSILON <= center_y <= placed_box.y + placed_box.height + EPSILON
+
+            if inside_x and inside_y:
+                return True
+
+        # nici podea, nici cutie sub centrul de masa -> instabil
+        return False
+
 
     def can_place_box(self, box) -> bool:
         if not self.is_inside_boundaries(box):
@@ -68,6 +106,10 @@ class Container:
         for placed_box in self.placed_boxes:
             if self.check_intersection(box, placed_box):
                 return False
+
+        # verificare stabilitate (Center of Mass)
+        if not self.is_stable(box):
+            return False
                 
         return True
     
